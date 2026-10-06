@@ -92,7 +92,7 @@ export const Navigation = () => {
       </div>
 
       <div className="mt-4">
-        <PageRedirect basePath="/navigation" tabs={navigationTabs} />
+        <PageRedirect basePath="/navigation" tabs={navigationTabs} defaultTab="Navigraph" />
         <TabRoutes basePath="/navigation" tabs={navigationTabs} />
       </div>
     </div>

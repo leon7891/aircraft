@@ -36,11 +36,16 @@ export const findLatestSeenPathname = (history: any, basePath: string): string |
   return [...historyEntries].reverse().find(({ pathname }) => pathname.includes(`${basePath}/`))?.pathname;
 };
 
-export const PageRedirect = ({ basePath, tabs }: PageRouteProps) => {
+interface PageRedirectProps extends PageRouteProps {
+  /** Name of the tab opened when none was visited yet, the first tab by default */
+  defaultTab?: string;
+}
+
+export const PageRedirect = ({ basePath, tabs, defaultTab = tabs[0].name }: PageRedirectProps) => {
   const history = useHistory();
   const getRedirectPathname = useCallback(
-    () => findLatestSeenPathname(history, basePath) ?? `${basePath}/${pathify(tabs[0].name)}`,
-    [history, basePath, tabs],
+    () => findLatestSeenPathname(history, basePath) ?? `${basePath}/${pathify(defaultTab)}`,
+    [history, basePath, defaultTab],
   );
   const redirectPathname = useRef(getRedirectPathname());
 
