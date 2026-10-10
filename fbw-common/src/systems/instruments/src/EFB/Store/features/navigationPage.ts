@@ -131,7 +131,8 @@ interface InitialChartState {
 }
 
 const initialState: InitialChartState = {
-  selectedNavigationTabIndex: 0,
+  // Navigraph, the default tab of the navigation page (navigationTabs in Navigation.tsx)
+  selectedNavigationTabIndex: 2,
   usingLightTheme: true,
   [NavigationTab.FAA]: {
     availableCharts: {
@@ -269,7 +270,7 @@ const initialState: InitialChartState = {
   boundingBox: undefined,
   pagesViewable: 1,
   pinnedCharts: [],
-  provider: ChartProvider.LIDO,
+  provider: ChartProvider.NAVIGRAPH,
 };
 
 export const navigationTabSlice = createSlice({
