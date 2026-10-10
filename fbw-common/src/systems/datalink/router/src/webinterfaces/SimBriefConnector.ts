@@ -327,6 +327,14 @@ export class SimBriefConnector {
       }
     }
 
+    // The navlog ends about 2500 ft above the destination, so its closest wind level is rarely the surface one.
+    // Add the surface wind of the destination, used as GRND wind and copied to PERF APPR
+    const destination = navlog[navlog.length - 1];
+    const surfaceWind = destination?.wind_data?.level?.find((wind) => parseInt(wind.altitude, 10) === 0);
+    if (destination?.type === 'apt' && surfaceWind && lastAltitude > 0) {
+      result.push(this.parseWindLevel(surfaceWind));
+    }
+
     return result;
   }
 
