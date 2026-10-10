@@ -6,7 +6,8 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDatabase } from '../test/Database';
 import { assertDiscontinuity, assertNotDiscontinuity } from '../test/LegUtils';
-import { LegType, WaypointDescriptor } from '@flybywiresim/fbw-sdk';
+import { LegType, MathUtils, WaypointDescriptor } from '@flybywiresim/fbw-sdk';
+import { extractWindDirectionFromVector, extractWindSpeedFromVector } from '../data/wind';
 import { loadAirwayLegs } from '../segments/enroute/AirwayLoading';
 import { emptyFlightPlan } from '../test/FlightPlan';
 import { testFlightPlanService } from '@fmgc/flightplanning/test/TestFlightPlanService';
@@ -286,6 +287,53 @@ describe('a base flight plan', () => {
         expect(destinationLeg.ident).toBe('MA260');
         expect(destinationLeg.definition.waypointDescriptor).not.toEqual(WaypointDescriptor.Runway);
       });
+    });
+  });
+
+  describe('wind uplink', () => {
+    const windEntry = (altitude: number, trueDegrees: number, magnitude: number) => ({
+      altitude,
+      vector: { magnitude, direction: trueDegrees * MathUtils.DEGREES_TO_RADIANS },
+      flags: 0,
+    });
+
+    const insertDescentWindUplink = async (fp: ReturnType<typeof emptyFlightPlan>) => {
+      fp.pendingWindUplink.descentWinds = [windEntry(5000, 100, 20), windEntry(0, 43, 4)];
+      fp.pendingWindUplink.onUplinkReadyToInsert();
+
+      await fp.insertWindUplink();
+    };
+
+    it('copies the uplinked GRND wind to PERF APPR', async () => {
+      const fp = emptyFlightPlan();
+
+      await insertDescentWindUplink(fp);
+
+      expect(fp.performanceData.approachWindDirection.get()).toBeCloseTo(43);
+      expect(fp.performanceData.approachWindMagnitude.get()).toBeCloseTo(4);
+      expect(fp.performanceData.isApproachWindPilotEntered.get()).toBe(false);
+    });
+
+    it('keeps a PERF APPR wind entered by the pilot and its GRND wind', async () => {
+      const fp = emptyFlightPlan();
+
+      fp.setPerformanceData('approachWindDirection', 26);
+      fp.setPerformanceData('approachWindMagnitude', 12);
+      fp.setPerformanceData('isApproachWindPilotEntered', true);
+      await fp.setDescentWindEntry(0, windEntry(0, 26, 12), false, false);
+
+      await insertDescentWindUplink(fp);
+
+      expect(fp.performanceData.approachWindDirection.get()).toBe(26);
+      expect(fp.performanceData.approachWindMagnitude.get()).toBe(12);
+      expect(fp.performanceData.isApproachWindPilotEntered.get()).toBe(true);
+
+      const [upperWind, groundWind] = fp.performanceData.descentWindEntries.get();
+
+      expect(upperWind.altitude).toBe(5000);
+      expect(groundWind.altitude).toBe(0);
+      expect(extractWindDirectionFromVector(groundWind.vector)).toBeCloseTo(26);
+      expect(extractWindSpeedFromVector(groundWind.vector)).toBeCloseTo(12);
     });
   });
 });

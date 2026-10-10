@@ -1164,10 +1164,23 @@ export class FlightPlan<P extends FlightPlanPerformanceData = FlightPlanPerforma
     }
 
     if (this.pendingWindUplink.descentWinds) {
+      // A wind entered by the pilot on PERF APPR is kept, as well as the GRND wind it created
+      const isApproachWindPilotEntered = this.performanceData.isApproachWindPilotEntered.get();
+      const destinationElevation = this.destinationAirport?.location.alt ?? 0;
+      const pilotGroundWind = isApproachWindPilotEntered
+        ? this.performanceData.descentWindEntries
+            .get()
+            .find((wind) => wind.altitude !== undefined && wind.altitude <= destinationElevation + 400)
+        : undefined;
+
       await this.deleteDescentWindEntries();
 
       for (const wind of this.pendingWindUplink.descentWinds) {
-        await this.setDescentWindEntry(wind.altitude!, wind, true, false);
+        await this.setDescentWindEntry(wind.altitude!, wind, !isApproachWindPilotEntered, false);
+      }
+
+      if (pilotGroundWind) {
+        await this.setDescentWindEntry(pilotGroundWind.altitude, pilotGroundWind, false, false);
       }
     }
 
