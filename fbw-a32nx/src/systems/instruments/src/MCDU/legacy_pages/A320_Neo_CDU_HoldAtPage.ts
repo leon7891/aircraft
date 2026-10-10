@@ -89,16 +89,14 @@ export class CDUHoldAtPage {
                 let ret =
                   CDUHoldAtPage.holdVerticalDistanceFromAlt(alt, a) - CDUHoldAtPage.holdVerticalDistanceFromAlt(alt, b);
                 if (ret === 0) {
-                  ret =
-                    Math.abs(a.magneticCourse - inboundMagneticCourse) -
-                    Math.abs(b.magneticCourse - inboundMagneticCourse);
+                  ret = Math.abs(a.course - inboundMagneticCourse) - Math.abs(b.course - inboundMagneticCourse);
                 }
                 return ret;
               });
 
             if (holds[0]) {
               defaultHold = {
-                inboundMagneticCourse: holds[0].magneticCourse,
+                inboundMagneticCourse: holds[0].course,
                 turnDirection: holds[0].turnDirection,
                 time: holds[0].lengthTime ? holds[0].lengthTime : undefined,
                 distance: holds[0].length ? holds[0].length : undefined,
