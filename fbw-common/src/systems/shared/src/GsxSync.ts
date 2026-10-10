@@ -295,6 +295,16 @@ export class GsxSyncA32NX extends GsxSync {
     return SimVar.GetSimVarValueFast('L:A32NX_FUEL_LEFT_MAIN_DESIRED', SimVarValueType.Number);
   }
 
+  // compare totals in the unit of the per-tank targets (gallons): getDesiredFuel() is a single inner tank
+  protected needsDefuel(): boolean {
+    const fob = SimVar.GetSimVarValueFast('FUEL TOTAL QUANTITY', SimVarValueType.GAL);
+    const desired = ['CENTER', 'LEFT_MAIN', 'LEFT_AUX', 'RIGHT_MAIN', 'RIGHT_AUX'].reduce(
+      (sum, tank) => sum + SimVar.GetSimVarValueFast(`L:A32NX_FUEL_${tank}_DESIRED`, SimVarValueType.Number),
+      0,
+    );
+    return fob + this.DEFUEL_DIFF_TARGET >= desired;
+  }
+
   protected setDesiredFuel(desiredFuel: number): void {
     SimVar.SetSimVarValue('L:A32NX_FUEL_LEFT_MAIN_DESIRED', SimVarValueType.Number, desiredFuel);
     SimVar.SetSimVarValue('L:A32NX_FUEL_RIGHT_MAIN_DESIRED', SimVarValueType.Number, desiredFuel);
