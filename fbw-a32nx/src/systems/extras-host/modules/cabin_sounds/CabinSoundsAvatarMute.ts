@@ -23,7 +23,8 @@ export class CabinSoundsAvatarMute implements Instrument {
   }
 
   public onUpdate(): void {
-    const isAvatar = SimVar.GetSimVarValue('IS AVATAR', SimVarValueType.Bool);
+    // environment variable: without the E: prefix it is read on the aircraft, which never reports the avatar mode
+    const isAvatar = SimVar.GetSimVarValue('E:IS AVATAR', SimVarValueType.Bool);
 
     for (const [setting, audible] of CabinSoundsAvatarMute.TOGGLES) {
       const value = isAvatar ? 0 : SimVar.GetSimVarValue(setting, SimVarValueType.Number);
