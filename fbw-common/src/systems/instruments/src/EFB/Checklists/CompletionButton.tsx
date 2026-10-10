@@ -4,7 +4,7 @@
 
 import { t, useAppDispatch, useAppSelector } from '@flybywiresim/flypad';
 import { ChecklistJsonDefinition, usePersistentNumberProperty, useSimVar } from '@flybywiresim/fbw-sdk-react';
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 
 import {
   areAllChecklistItemsCompleted,
@@ -44,10 +44,17 @@ export const CompletionButton = () => {
   // allows the completion button to be used via LVar - if the LVar is set to true, the button will be clicked,
   // and the LVar will be reset to false. This can be used, for example, to trigger completion from a hardware button.
   const [completeItemVar, setCompleteItemVar] = useSimVar('L:A32NX_EFB_CHECKLIST_COMPLETE_ITEM', 'bool', 200);
+  // a request still pending when this page opens has only opened it (see Efb), it doesn't complete an item
+  const isInitialValue = useRef(true);
   useEffect(() => {
     setCompleteItemVar(false);
   }, []);
   useEffect(() => {
+    if (isInitialValue.current) {
+      isInitialValue.current = false;
+      return;
+    }
+
     if (completeItemVar) {
       setCompleteItemVar(false);
       if (checklists[selectedChecklistIndex].markedCompleted && selectedChecklistIndex < checklists.length - 1) {

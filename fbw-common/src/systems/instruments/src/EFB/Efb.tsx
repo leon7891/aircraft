@@ -363,6 +363,23 @@ export const Efb: React.FC<EfbProps> = ({ aircraftChecklistsProp }) => {
     if (!autoFillChecklists) return;
     setAutomaticItemStates(aircraftChecklistsProp);
   }, 1000);
+  // A checklist item completion requested from another page only opens the checklists page, the next request
+  // completes the item there (see CompletionButton). Requests made while the flyPad is off are ignored.
+  const [checklistCompleteItemRequested, setChecklistCompleteItemRequested] = useSimVar(
+    'L:A32NX_EFB_CHECKLIST_COMPLETE_ITEM',
+    'bool',
+    200,
+  );
+  useEffect(() => {
+    if (!checklistCompleteItemRequested || history.location.pathname.startsWith('/checklists')) {
+      return;
+    }
+
+    setChecklistCompleteItemRequested(false);
+    if (powerState === PowerStates.LOADED) {
+      history.push('/checklists');
+    }
+  }, [checklistCompleteItemRequested]);
   // ===================================
 
   const offToLoaded = () => {
