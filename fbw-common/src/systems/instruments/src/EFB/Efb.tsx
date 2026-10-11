@@ -382,6 +382,20 @@ export const Efb: React.FC<EfbProps> = ({ aircraftChecklistsProp }) => {
   }, [checklistCompleteItemRequested]);
   // ===================================
 
+  // Opens the charts page from outside the flyPad (e.g. a hardware button) on its last seen tab, like the toolbar
+  // button does. Requests made while the flyPad is off are ignored.
+  const [openChartsRequested, setOpenChartsRequested] = useSimVar('L:A32NX_EFB_OPEN_CHARTS', 'bool', 200);
+  useEffect(() => {
+    if (!openChartsRequested) {
+      return;
+    }
+
+    setOpenChartsRequested(false);
+    if (powerState === PowerStates.LOADED && !history.location.pathname.startsWith('/navigation')) {
+      history.push('/navigation');
+    }
+  }, [openChartsRequested]);
+
   const offToLoaded = () => {
     const shouldWait = powerState === PowerStates.SHUTOFF || powerState === PowerStates.EMPTY;
     setPowerState(PowerStates.LOADING);
