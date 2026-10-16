@@ -27,6 +27,7 @@ import { A32NXKeyInterceptor } from './modules/key_interceptor/KeyInterceptor';
 import { VersionCheck } from './modules/version_check/VersionCheck';
 import { AircraftSync } from './modules/aircraft_sync/AircraftSync';
 import { LightSync } from './modules/light_sync/LightSync';
+import { Refuel } from './modules/refuel/Refuel';
 import { A32NXEcpBusPublisher } from '../shared/src/publishers/A32NXEcpBusPublisher';
 
 /**
@@ -107,6 +108,8 @@ class ExtrasHost extends BaseInstrument {
 
   private readonly gsxSync = new GsxSyncA32NX(this.bus);
 
+  private readonly refuel = new Refuel();
+
   /**
    * "mainmenu" = 0
    * "loading" = 1
@@ -153,6 +156,7 @@ class ExtrasHost extends BaseInstrument {
     this.backplane.addInstrument('Clock', this.clock);
     this.backplane.addInstrument('LightSync', this.lightSync);
     this.backplane.addInstrument('GsxSync', this.gsxSync);
+    this.backplane.addInstrument('Refuel', this.refuel);
 
     console.log('A32NX_EXTRASHOST: Created');
   }

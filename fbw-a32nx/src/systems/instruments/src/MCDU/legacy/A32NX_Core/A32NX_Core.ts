@@ -1,7 +1,6 @@
 // @ts-strict-ignore
 import { UpdateThrottler } from '@flybywiresim/fbw-sdk';
 import { A32NX_Util } from '../../../../../shared/src/A32NX_Util';
-import { A32NX_Refuel } from './A32NX_Refuel';
 import { A32NX_Speeds } from './A32NX_Speeds';
 import { A32NX_FADEC } from './A32NX_FADEC';
 import { A32NX_GPWS } from './A32NX_GPWS';
@@ -14,11 +13,6 @@ const ENABLE_TOTAL_UPDATE_TIME_TRACING = false;
 // FIXME move Speeds to somewhere nicer in the FMS, and the rest out to system or extras host
 export class A32NX_Core {
   private readonly modules = [
-    {
-      name: 'Refuel',
-      module: new A32NX_Refuel(),
-      updateInterval: 150,
-    },
     {
       name: 'LocalVars',
       module: new A32NX_LocalVarUpdater(),

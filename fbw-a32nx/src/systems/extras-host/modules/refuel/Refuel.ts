@@ -1,8 +1,8 @@
-// Copyright (c) 2021-2025 FlyByWire Simulations
-//
+// Copyright (c) 2021-2026 FlyByWire Simulations
 // SPDX-License-Identifier: GPL-3.0
 
-import { NXUnits } from '@flybywiresim/fbw-sdk';
+import { GameStateProvider, Instrument, Wait } from '@microsoft/msfs-sdk';
+import { NXUnits, UpdateThrottler } from '@flybywiresim/fbw-sdk';
 
 const WING_FUELRATE_GAL_SEC = 4.01;
 const CENTER_MODIFIER = 0.4528;
@@ -12,11 +12,42 @@ enum RefuelRateNumeric {
   INSTANT = 2,
 }
 
-// FIXME move to systems host
-export class A32NX_Refuel {
-  constructor() {}
+/**
+ * Moves the fuel towards the targets set on the flyPad fuel page. It runs here rather than in the MCDU because MSFS 2024
+ * stops updating the cockpit screens while the user walks around as an avatar: the refuel would freeze there, and GSX,
+ * which only watches the fuel quantity, would send its truck away long before the end.
+ */
+export class Refuel implements Instrument {
+  private readonly throttler = new UpdateThrottler(150);
 
-  init() {
+  private lastUpdateTime = 0;
+
+  private isInit = false;
+
+  public init(): void {
+    // the targets are synced with the tanks once the flight is loaded
+    Wait.awaitSubscribable(GameStateProvider.get(), (state) => state === GameState.ingame, true).then(() => {
+      this.initTargets();
+      this.lastUpdateTime = Date.now();
+      this.isInit = true;
+    });
+  }
+
+  public onUpdate(): void {
+    if (!this.isInit) {
+      return;
+    }
+
+    const now = Date.now();
+    const deltaTime = this.throttler.canUpdate(now - this.lastUpdateTime);
+    this.lastUpdateTime = now;
+
+    if (deltaTime !== -1) {
+      this.update(deltaTime);
+    }
+  }
+
+  private initTargets(): void {
     const totalFuelGallons = 6267;
     const fuelWeight = SimVar.GetSimVarValue('FUEL WEIGHT PER GALLON', 'kilograms');
     const centerCurrentSimVar = SimVar.GetSimVarValue('FUEL TANK CENTER QUANTITY', 'Gallons');
@@ -39,14 +70,15 @@ export class A32NX_Refuel {
     SimVar.SetSimVarValue('L:A32NX_FUEL_RIGHT_AUX_DESIRED', 'Number', ROutCurrentSimVar);
   }
 
-  defuelTank(multiplier: number) {
+  private defuelTank(multiplier: number) {
     return -WING_FUELRATE_GAL_SEC * multiplier;
   }
-  refuelTank(multiplier: number) {
+
+  private refuelTank(multiplier: number) {
     return WING_FUELRATE_GAL_SEC * multiplier;
   }
 
-  update(_deltaTime: number) {
+  private update(deltaTime: number) {
     const refuelStartedByUser = SimVar.GetSimVarValue('L:A32NX_REFUEL_STARTED_BY_USR', 'Bool');
     if (!refuelStartedByUser) {
       return;
@@ -94,7 +126,7 @@ export class A32NX_Refuel {
       if (refuelRate === RefuelRateNumeric.FAST) {
         multiplier = 5;
       }
-      multiplier *= _deltaTime / 1000;
+      multiplier *= deltaTime / 1000;
       //DEFUELING (center tank first, then main, then aux)
       if (centerCurrent > centerTarget) {
         centerCurrent += this.defuelTank(multiplier) * CENTER_MODIFIER;
