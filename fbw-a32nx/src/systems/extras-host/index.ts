@@ -29,6 +29,7 @@ import { AircraftSync } from './modules/aircraft_sync/AircraftSync';
 import { LightSync } from './modules/light_sync/LightSync';
 import { CabinSoundsAvatarMute } from './modules/cabin_sounds/CabinSoundsAvatarMute';
 import { CabinSoundsAnnouncementDelays } from './modules/cabin_sounds/CabinSoundsAnnouncementDelays';
+import { Refuel } from './modules/refuel/Refuel';
 import { A32NXEcpBusPublisher } from '../shared/src/publishers/A32NXEcpBusPublisher';
 
 /**
@@ -113,6 +114,8 @@ class ExtrasHost extends BaseInstrument {
 
   private readonly cabinSoundsAnnouncementDelays = new CabinSoundsAnnouncementDelays();
 
+  private readonly refuel = new Refuel();
+
   /**
    * "mainmenu" = 0
    * "loading" = 1
@@ -161,6 +164,7 @@ class ExtrasHost extends BaseInstrument {
     this.backplane.addInstrument('GsxSync', this.gsxSync);
     this.backplane.addInstrument('CabinSoundsAvatarMute', this.cabinSoundsAvatarMute);
     this.backplane.addInstrument('CabinSoundsAnnouncementDelays', this.cabinSoundsAnnouncementDelays);
+    this.backplane.addInstrument('Refuel', this.refuel);
 
     console.log('A32NX_EXTRASHOST: Created');
   }

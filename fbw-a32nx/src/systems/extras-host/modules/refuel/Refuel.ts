@@ -1,22 +1,60 @@
-// Copyright (c) 2021-2025 FlyByWire Simulations
-//
+// Copyright (c) 2021-2026 FlyByWire Simulations
 // SPDX-License-Identifier: GPL-3.0
 
-import { NXUnits } from '@flybywiresim/fbw-sdk';
+import { GameStateProvider, Instrument, Wait } from '@microsoft/msfs-sdk';
+import { NXUnits, UpdateThrottler } from '@flybywiresim/fbw-sdk';
 
 const WING_FUELRATE_GAL_SEC = 4.01;
 const CENTER_MODIFIER = 0.4528;
+// a tank within this margin of its target counts as at it, so a quantity the sim may read back a hair off the value
+// written neither moves the tank again nor holds the refuel
+const TARGET_TOLERANCE_GAL = 0.01;
 enum RefuelRateNumeric {
   REAL = 0,
   FAST = 1,
   INSTANT = 2,
 }
 
-// FIXME move to systems host
-export class A32NX_Refuel {
-  constructor() {}
+const isAboveTarget = (current: number, target: number) => current > target + TARGET_TOLERANCE_GAL;
+const isBelowTarget = (current: number, target: number) => current < target - TARGET_TOLERANCE_GAL;
+const isAtTarget = (current: number, target: number) => Math.abs(current - target) <= TARGET_TOLERANCE_GAL;
 
-  init() {
+/**
+ * Moves the fuel towards the targets set on the flyPad fuel page. It runs here rather than in the MCDU because MSFS 2024
+ * stops updating the cockpit screens while the user walks around as an avatar: the refuel would freeze there, and GSX,
+ * which only watches the fuel quantity, would send its truck away long before the end.
+ */
+export class Refuel implements Instrument {
+  private readonly throttler = new UpdateThrottler(150);
+
+  private lastUpdateTime = 0;
+
+  private isInit = false;
+
+  public init(): void {
+    // the targets are synced with the tanks once the flight is loaded
+    Wait.awaitSubscribable(GameStateProvider.get(), (state) => state === GameState.ingame, true).then(() => {
+      this.initTargets();
+      this.lastUpdateTime = Date.now();
+      this.isInit = true;
+    });
+  }
+
+  public onUpdate(): void {
+    if (!this.isInit) {
+      return;
+    }
+
+    const now = Date.now();
+    const deltaTime = this.throttler.canUpdate(now - this.lastUpdateTime);
+    this.lastUpdateTime = now;
+
+    if (deltaTime !== -1) {
+      this.update(deltaTime);
+    }
+  }
+
+  private initTargets(): void {
     const totalFuelGallons = 6267;
     const fuelWeight = SimVar.GetSimVarValue('FUEL WEIGHT PER GALLON', 'kilograms');
     const centerCurrentSimVar = SimVar.GetSimVarValue('FUEL TANK CENTER QUANTITY', 'Gallons');
@@ -39,14 +77,30 @@ export class A32NX_Refuel {
     SimVar.SetSimVarValue('L:A32NX_FUEL_RIGHT_AUX_DESIRED', 'Number', ROutCurrentSimVar);
   }
 
-  defuelTank(multiplier: number) {
-    return -WING_FUELRATE_GAL_SEC * multiplier;
-  }
-  refuelTank(multiplier: number) {
-    return WING_FUELRATE_GAL_SEC * multiplier;
+  /**
+   * Lowers a tank towards its target and returns its quantity. A tank below its target is left to the refuel steps:
+   * setting it to the target in one go would be a jump that the FADEC undoes as a change from the fuel menu.
+   */
+  private defuelTank(simVar: string, current: number, target: number, step: number): number {
+    if (!isAboveTarget(current, target)) {
+      return current;
+    }
+    const quantity = Math.max(current - step, target);
+    SimVar.SetSimVarValue(simVar, 'Gallons', quantity);
+    return quantity;
   }
 
-  update(_deltaTime: number) {
+  /** Raises a tank towards its target and returns its quantity. A tank above its target is left to the defuel steps. */
+  private refuelTank(simVar: string, current: number, target: number, step: number): number {
+    if (!isBelowTarget(current, target)) {
+      return current;
+    }
+    const quantity = Math.min(current + step, target);
+    SimVar.SetSimVarValue(simVar, 'Gallons', quantity);
+    return quantity;
+  }
+
+  private update(deltaTime: number) {
     const refuelStartedByUser = SimVar.GetSimVarValue('L:A32NX_REFUEL_STARTED_BY_USR', 'Bool');
     if (!refuelStartedByUser) {
       return;
@@ -94,91 +148,42 @@ export class A32NX_Refuel {
       if (refuelRate === RefuelRateNumeric.FAST) {
         multiplier = 5;
       }
-      multiplier *= _deltaTime / 1000;
+      multiplier *= deltaTime / 1000;
+      const centerStep = WING_FUELRATE_GAL_SEC * multiplier * CENTER_MODIFIER;
+      // the two tanks of a pair share the wing rate
+      const wingStep = (WING_FUELRATE_GAL_SEC * multiplier) / 2;
       //DEFUELING (center tank first, then main, then aux)
-      if (centerCurrent > centerTarget) {
-        centerCurrent += this.defuelTank(multiplier) * CENTER_MODIFIER;
-        if (centerCurrent < centerTarget) {
-          centerCurrent = centerTarget;
-        }
-        SimVar.SetSimVarValue('FUEL TANK CENTER QUANTITY', 'Gallons', centerCurrent);
+      centerCurrent = this.defuelTank('FUEL TANK CENTER QUANTITY', centerCurrent, centerTarget, centerStep);
+      LInnCurrent = this.defuelTank('FUEL TANK LEFT MAIN QUANTITY', LInnCurrent, LInnTarget, wingStep);
+      RInnCurrent = this.defuelTank('FUEL TANK RIGHT MAIN QUANTITY', RInnCurrent, RInnTarget, wingStep);
+      if (isAboveTarget(LInnCurrent, LInnTarget) || isAboveTarget(RInnCurrent, RInnTarget)) {
+        return;
       }
-      if (LInnCurrent > LInnTarget || RInnCurrent > RInnTarget) {
-        LInnCurrent += this.defuelTank(multiplier) / 2;
-        RInnCurrent += this.defuelTank(multiplier) / 2;
-        if (LInnCurrent < LInnTarget) {
-          LInnCurrent = LInnTarget;
-        }
-        if (RInnCurrent < RInnTarget) {
-          RInnCurrent = RInnTarget;
-        }
-        SimVar.SetSimVarValue('FUEL TANK RIGHT MAIN QUANTITY', 'Gallons', RInnCurrent);
-        SimVar.SetSimVarValue('FUEL TANK LEFT MAIN QUANTITY', 'Gallons', LInnCurrent);
-        if (LInnCurrent != LInnTarget || RInnCurrent != RInnTarget) {
-          return;
-        }
-      }
-      if (LOutCurrent > LOutTarget || ROutCurrent > ROutTarget) {
-        LOutCurrent += this.defuelTank(multiplier) / 2;
-        ROutCurrent += this.defuelTank(multiplier) / 2;
-        if (LOutCurrent < LOutTarget) {
-          LOutCurrent = LOutTarget;
-        }
-        if (ROutCurrent < ROutTarget) {
-          ROutCurrent = ROutTarget;
-        }
-        SimVar.SetSimVarValue('FUEL TANK RIGHT AUX QUANTITY', 'Gallons', ROutCurrent);
-        SimVar.SetSimVarValue('FUEL TANK LEFT AUX QUANTITY', 'Gallons', LOutCurrent);
-        if (LOutCurrent != LOutTarget || ROutCurrent != ROutTarget) {
-          return;
-        }
+      LOutCurrent = this.defuelTank('FUEL TANK LEFT AUX QUANTITY', LOutCurrent, LOutTarget, wingStep);
+      ROutCurrent = this.defuelTank('FUEL TANK RIGHT AUX QUANTITY', ROutCurrent, ROutTarget, wingStep);
+      if (isAboveTarget(LOutCurrent, LOutTarget) || isAboveTarget(ROutCurrent, ROutTarget)) {
+        return;
       }
       // REFUELING (aux first, then main, then center tank)
-      if (centerCurrent < centerTarget) {
-        centerCurrent += this.refuelTank(multiplier) * CENTER_MODIFIER;
-        if (centerCurrent > centerTarget) {
-          centerCurrent = centerTarget;
-        }
-        SimVar.SetSimVarValue('FUEL TANK CENTER QUANTITY', 'Gallons', centerCurrent);
+      centerCurrent = this.refuelTank('FUEL TANK CENTER QUANTITY', centerCurrent, centerTarget, centerStep);
+      LOutCurrent = this.refuelTank('FUEL TANK LEFT AUX QUANTITY', LOutCurrent, LOutTarget, wingStep);
+      ROutCurrent = this.refuelTank('FUEL TANK RIGHT AUX QUANTITY', ROutCurrent, ROutTarget, wingStep);
+      if (isBelowTarget(LOutCurrent, LOutTarget) || isBelowTarget(ROutCurrent, ROutTarget)) {
+        return;
       }
-      if (LOutCurrent < LOutTarget || ROutCurrent < ROutTarget) {
-        LOutCurrent += this.refuelTank(multiplier) / 2;
-        ROutCurrent += this.refuelTank(multiplier) / 2;
-        if (LOutCurrent > LOutTarget) {
-          LOutCurrent = LOutTarget;
-        }
-        if (ROutCurrent > ROutTarget) {
-          ROutCurrent = ROutTarget;
-        }
-        SimVar.SetSimVarValue('FUEL TANK RIGHT AUX QUANTITY', 'Gallons', ROutCurrent);
-        SimVar.SetSimVarValue('FUEL TANK LEFT AUX QUANTITY', 'Gallons', LOutCurrent);
-        if (LOutCurrent != LOutTarget || ROutCurrent != ROutTarget) {
-          return;
-        }
-      }
-      if (LInnCurrent < LInnTarget || RInnCurrent < RInnTarget) {
-        LInnCurrent += this.refuelTank(multiplier) / 2;
-        RInnCurrent += this.refuelTank(multiplier) / 2;
-        if (LInnCurrent > LInnTarget) {
-          LInnCurrent = LInnTarget;
-        }
-        if (RInnCurrent > RInnTarget) {
-          RInnCurrent = RInnTarget;
-        }
-        SimVar.SetSimVarValue('FUEL TANK RIGHT MAIN QUANTITY', 'Gallons', RInnCurrent);
-        SimVar.SetSimVarValue('FUEL TANK LEFT MAIN QUANTITY', 'Gallons', LInnCurrent);
-        if (LInnCurrent != LInnTarget || RInnCurrent != RInnTarget) {
-          return;
-        }
+      LInnCurrent = this.refuelTank('FUEL TANK LEFT MAIN QUANTITY', LInnCurrent, LInnTarget, wingStep);
+      RInnCurrent = this.refuelTank('FUEL TANK RIGHT MAIN QUANTITY', RInnCurrent, RInnTarget, wingStep);
+      if (isBelowTarget(LInnCurrent, LInnTarget) || isBelowTarget(RInnCurrent, RInnTarget)) {
+        return;
       }
     }
 
     if (
-      parseInt(centerCurrent) === parseInt(centerTarget) &&
-      parseInt(LInnCurrent) === parseInt(LInnTarget) &&
-      parseInt(LOutCurrent) === parseInt(LOutTarget) &&
-      parseInt(RInnCurrent) === parseInt(RInnTarget) &&
-      parseInt(ROutCurrent) === parseInt(ROutTarget)
+      isAtTarget(centerCurrent, centerTarget) &&
+      isAtTarget(LInnCurrent, LInnTarget) &&
+      isAtTarget(LOutCurrent, LOutTarget) &&
+      isAtTarget(RInnCurrent, RInnTarget) &&
+      isAtTarget(ROutCurrent, ROutTarget)
     ) {
       // DONE FUELING
       SimVar.SetSimVarValue('L:A32NX_REFUEL_STARTED_BY_USR', 'Bool', false);
