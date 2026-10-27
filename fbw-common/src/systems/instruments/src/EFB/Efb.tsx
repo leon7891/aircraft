@@ -396,6 +396,38 @@ export const Efb: React.FC<EfbProps> = ({ aircraftChecklistsProp }) => {
     }
   }, [openChartsRequested]);
 
+  // Opens the dashboard from outside the flyPad, like the toolbar button does. Requests made while the flyPad is off
+  // are ignored.
+  const [openDashboardRequested, setOpenDashboardRequested] = useSimVar('L:A32NX_EFB_OPEN_DASHBOARD', 'bool', 200);
+  useEffect(() => {
+    if (!openDashboardRequested) {
+      return;
+    }
+
+    setOpenDashboardRequested(false);
+    if (powerState === PowerStates.LOADED && !history.location.pathname.startsWith('/dashboard')) {
+      history.push('/dashboard');
+    }
+  }, [openDashboardRequested]);
+
+  // Opens the ground page on its payload tab from outside the flyPad. Requests made while the flyPad is off are
+  // ignored.
+  const [openGroundPayloadRequested, setOpenGroundPayloadRequested] = useSimVar(
+    'L:A32NX_EFB_OPEN_GROUND_PAYLOAD',
+    'bool',
+    200,
+  );
+  useEffect(() => {
+    if (!openGroundPayloadRequested) {
+      return;
+    }
+
+    setOpenGroundPayloadRequested(false);
+    if (powerState === PowerStates.LOADED && !history.location.pathname.startsWith('/ground/payload')) {
+      history.push('/ground/payload');
+    }
+  }, [openGroundPayloadRequested]);
+
   const offToLoaded = () => {
     const shouldWait = powerState === PowerStates.SHUTOFF || powerState === PowerStates.EMPTY;
     setPowerState(PowerStates.LOADING);
