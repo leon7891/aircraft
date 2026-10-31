@@ -410,6 +410,20 @@ export const Efb: React.FC<EfbProps> = ({ aircraftChecklistsProp }) => {
     }
   }, [openDashboardRequested]);
 
+  // Opens the dispatch page from outside the flyPad, like the toolbar button does. Requests made while the flyPad is
+  // off are ignored.
+  const [openDispatchRequested, setOpenDispatchRequested] = useSimVar('L:A32NX_EFB_OPEN_DISPATCH', 'bool', 200);
+  useEffect(() => {
+    if (!openDispatchRequested) {
+      return;
+    }
+
+    setOpenDispatchRequested(false);
+    if (powerState === PowerStates.LOADED && !history.location.pathname.startsWith('/dispatch')) {
+      history.push('/dispatch');
+    }
+  }, [openDispatchRequested]);
+
   // Opens the ground page on its payload tab from outside the flyPad. Requests made while the flyPad is off are
   // ignored.
   const [openGroundPayloadRequested, setOpenGroundPayloadRequested] = useSimVar(
